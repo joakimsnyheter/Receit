@@ -1,7 +1,7 @@
 import { MarkdownView, Notice, Plugin, TFile } from "obsidian";
 import { ReadReceiptPluginSettings, DEFAULT_SETTINGS } from "./types";
 import { getReceipts, toggleReceipt, addReceipt, removeReceipt } from "./frontmatter";
-import { renderReceiptPanel } from "./ui";
+import { renderReceiptPanel, formatTimestamp } from "./ui";
 import { ReadReceiptSettingTab } from "./settings";
 
 const PANEL_CLASS = "read-receipt-panel";
@@ -11,6 +11,8 @@ export default class ReadReceiptPlugin extends Plugin {
   settings: ReadReceiptPluginSettings;
   private statusBarItem: HTMLElement | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  // Track known readers per file path to detect new ones on sync
+  private knownReaders = new Map<string, Set<string>>();
 
   async onload() {
     await this.loadSettings();
@@ -82,6 +84,16 @@ export default class ReadReceiptPlugin extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: "export-readers-markdown",
+      name: "Export readers as markdown table",
+      checkCallback: (checking) => {
+        if (!this.getActiveMarkdownFile()) return false;
+        if (!checking) this.exportReadersMarkdown();
+        return true;
+      },
+    });
+
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
         this.scheduleRefresh();
@@ -93,6 +105,7 @@ export default class ReadReceiptPlugin extends Plugin {
       this.app.metadataCache.on("changed", (file) => {
         const activeFile = this.getActiveMarkdownFile();
         if (activeFile && activeFile.path === file.path) {
+          this.checkForNewReaders(file);
           this.scheduleRefresh();
         }
       })
@@ -228,10 +241,40 @@ export default class ReadReceiptPlugin extends Plugin {
       return;
     }
     const text = entries
-      .map((e) => `${e.user} (${new Date(e.readAt).toLocaleString()})`)
+      .map((e) => `${e.user} (${formatTimestamp(e.readAt, this.settings.dateFormat)})`)
       .join("\n");
     await navigator.clipboard.writeText(text);
     new Notice("Readers list copied to clipboard");
+  }
+
+  async exportReadersMarkdown(): Promise<void> {
+    const file = this.getActiveMarkdownFile();
+    if (!file) return;
+    const entries = getReceipts(this.app, file, this.settings.fieldName);
+    if (entries.length === 0) {
+      new Notice("No readers to export.");
+      return;
+    }
+    const header = "| Name | Read at |\n|------|---------|";
+    const rows = entries
+      .map((e) => `| ${e.user} | ${formatTimestamp(e.readAt, this.settings.dateFormat)} |`)
+      .join("\n");
+    await navigator.clipboard.writeText(`${header}\n${rows}`);
+    new Notice("Readers table copied to clipboard");
+  }
+
+  private checkForNewReaders(file: TFile): void {
+    if (!this.settings.notifyOnNewReader) return;
+    const entries = getReceipts(this.app, file, this.settings.fieldName);
+    const known = this.knownReaders.get(file.path) ?? new Set<string>();
+    const newReaders = entries.filter(
+      (e) => e.user !== this.settings.userName && !known.has(e.user)
+    );
+    if (newReaders.length > 0) {
+      const names = newReaders.map((e) => e.user).join(", ");
+      new Notice(`Receit: ${names} just read this note`);
+    }
+    this.knownReaders.set(file.path, new Set(entries.map((e) => e.user)));
   }
 
   // Debounce so rapid events (vault modify + metadataCache.changed) only trigger one redraw
@@ -241,27 +284,6 @@ export default class ReadReceiptPlugin extends Plugin {
       this.refreshUI();
       this.updateStatusBar();
     }, DEBOUNCE_MS);
-  }
-
-  refreshUI(): void {
-    // Remove all existing panels first
-    document.querySelectorAll(`.${PANEL_CLASS}`).forEach((el) => el.remove());
-
-    if (!this.settings.showInNoteView) return;
-
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!view) return;
-
-    const file = view.file;
-    if (!file || file.extension !== "md") return;
-
-    const entries = getReceipts(this.app, file, this.settings.fieldName);
-    const panel = view.contentEl.createDiv(PANEL_CLASS);
-    view.contentEl.insertBefore(panel, view.contentEl.firstChild);
-
-    renderReceiptPanel(panel, entries, this.settings, this.settings.userName, () => {
-      this.toggleCurrentNote();
-    });
   }
 
   updateStatusBar(): void {
@@ -291,6 +313,42 @@ export default class ReadReceiptPlugin extends Plugin {
           : " · You have not read this"
         : "";
       this.statusBarItem.setText(readerText + youText);
+    }
+  }
+
+  refreshUI(): void {
+    // Remove all existing panels first
+    document.querySelectorAll(`.${PANEL_CLASS}`).forEach((el) => el.remove());
+
+    if (!this.settings.showInNoteView) return;
+
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view) return;
+
+    const file = view.file;
+    if (!file || file.extension !== "md") return;
+
+    const entries = getReceipts(this.app, file, this.settings.fieldName);
+
+    // Insert panel into both editing and reading mode containers
+    const targets = view.contentEl.querySelectorAll(
+      ".cm-editor, .markdown-reading-view"
+    );
+    if (targets.length > 0) {
+      targets.forEach((target) => {
+        const panel = createDiv(PANEL_CLASS);
+        target.parentElement?.insertBefore(panel, target);
+        renderReceiptPanel(panel, entries, this.settings, this.settings.userName, () => {
+          this.toggleCurrentNote();
+        });
+      });
+    } else {
+      // Fallback: insert at top of contentEl
+      const panel = view.contentEl.createDiv(PANEL_CLASS);
+      view.contentEl.insertBefore(panel, view.contentEl.firstChild);
+      renderReceiptPanel(panel, entries, this.settings, this.settings.userName, () => {
+        this.toggleCurrentNote();
+      });
     }
   }
 }

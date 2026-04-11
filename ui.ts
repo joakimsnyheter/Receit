@@ -1,13 +1,38 @@
-import { ReadReceiptEntry, ReadReceiptPluginSettings } from "./types";
+import { ReadReceiptEntry, ReadReceiptPluginSettings, DateFormat } from "./types";
 
-function formatTimestamp(isoString: string): string {
-  const d = new Date(isoString);
-  return d.toLocaleString(undefined, {
+export function formatTimestamp(raw: string, format: DateFormat): string {
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  switch (format) {
+    case "iso":
+      return d.toISOString().slice(0, 16).replace("T", " ");
+    case "eu":
+      return (
+        d.toLocaleDateString("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit" }) +
+        " " +
+        d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })
+      );
+    case "short":
+    default:
+      return (
+        d.toLocaleDateString("sv-SE", { year: "numeric", month: "short", day: "numeric" }) +
+        ", " +
+        d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })
+      );
+  }
+}
+
+export function formatTooltip(raw: string): string {
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  return d.toLocaleString("sv-SE", {
+    weekday: "long",
     year: "numeric",
-    month: "short",
+    month: "long",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
   });
 }
 
@@ -16,8 +41,9 @@ function sortEntries(
   order: "newest" | "oldest"
 ): ReadReceiptEntry[] {
   return [...entries].sort((a, b) => {
-    const diff = new Date(a.readAt).getTime() - new Date(b.readAt).getTime();
-    return order === "newest" ? -diff : diff;
+    const aTime = new Date(a.readAt).getTime();
+    const bTime = new Date(b.readAt).getTime();
+    return order === "newest" ? bTime - aTime : aTime - bTime;
   });
 }
 
@@ -65,6 +91,10 @@ export function renderReceiptPanel(
     const isYou = entry.user === currentUser;
     const chip = readersEl.createDiv(isYou ? "rr-chip rr-chip--you" : "rr-chip");
 
+    // Tooltip with full timestamp on hover
+    chip.setAttribute("title", formatTooltip(entry.readAt));
+    chip.setAttribute("aria-label", formatTooltip(entry.readAt));
+
     chip.createSpan({
       cls: "rr-chip-name",
       text: isYou ? `${entry.user} (you)` : entry.user,
@@ -73,8 +103,9 @@ export function renderReceiptPanel(
     if (settings.displayMode === "full" && settings.showTimestamps) {
       chip.createSpan({
         cls: "rr-chip-ts",
-        text: formatTimestamp(entry.readAt),
+        text: formatTimestamp(entry.readAt, settings.dateFormat),
       });
     }
   }
 }
+

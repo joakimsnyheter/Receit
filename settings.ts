@@ -128,5 +128,34 @@ export class ReadReceiptSettingTab extends PluginSettingTab {
             this.plugin.updateStatusBar();
           })
       );
+
+    new Setting(containerEl)
+      .setName("Date format")
+      .setDesc("How dates are displayed in the panel and exports.")
+      .addDropdown((d) =>
+        d
+          .addOption("short", "11 apr 2026, 13:46")
+          .addOption("eu", "2026-04-11 13:46")
+          .addOption("iso", "2026-04-11 13:46 (ISO)")
+          .setValue(this.plugin.settings.dateFormat)
+          .onChange(async (v) => {
+            this.plugin.settings.dateFormat =
+              v as ReadReceiptPluginSettings["dateFormat"];
+            await this.plugin.saveSettings();
+            this.plugin.refreshUI();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Notify on new reader")
+      .setDesc("Show a notice when someone else marks a note as read while you have it open.")
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.notifyOnNewReader)
+          .onChange(async (v) => {
+            this.plugin.settings.notifyOnNewReader = v;
+            await this.plugin.saveSettings();
+          })
+      );
   }
 }

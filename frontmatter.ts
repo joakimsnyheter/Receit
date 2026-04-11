@@ -82,19 +82,9 @@ export async function toggleReceipt(
   }
 }
 
-function formatDate(isoOrLocale: string): string {
-  // Try to parse as ISO first, fall back to the string as-is
-  const d = new Date(isoOrLocale);
-  if (isNaN(d.getTime())) return isoOrLocale;
-  return (
-    d.toLocaleDateString("sv-SE", { year: "numeric", month: "short", day: "numeric" }) +
-    ", " +
-    d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })
-  );
-}
-
 function serializeEntry(entry: ReadReceiptEntry): string {
-  return `${entry.user}: ${formatDate(entry.readAt)}`;
+  // Always store ISO timestamp — display formatting happens in the UI layer
+  return `${entry.user}: ${entry.readAt}`;
 }
 
 async function writeReceipts(

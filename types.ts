@@ -5,6 +5,7 @@ export interface ReadReceiptEntry {
 
 export type DisplayMode = "full" | "compact" | "count";
 export type SortOrder = "newest" | "oldest";
+export type DateFormat = "short" | "iso" | "eu";
 
 export interface ReadReceiptPluginSettings {
   userName: string;
@@ -15,6 +16,8 @@ export interface ReadReceiptPluginSettings {
   enableRibbonIcon: boolean;
   enableStatusBar: boolean;
   displayMode: DisplayMode;
+  dateFormat: DateFormat;
+  notifyOnNewReader: boolean;
 }
 
 export const DEFAULT_SETTINGS: ReadReceiptPluginSettings = {
@@ -26,4 +29,6 @@ export const DEFAULT_SETTINGS: ReadReceiptPluginSettings = {
   enableRibbonIcon: true,
   enableStatusBar: true,
   displayMode: "full",
+  dateFormat: "short",
+  notifyOnNewReader: true,
 };
