@@ -5,6 +5,6 @@
   "minAppVersion": "0.15.0",
   "description": "Track who has read your shared notes with simple read receipts stored in frontmatter.",
   "author": "JJ",
-  "authorUrl": "",
+  "authorUrl": "https://github.com/joakimsnyheter/Receit",
   "isDesktopOnly": false
 }
