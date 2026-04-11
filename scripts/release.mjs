@@ -28,7 +28,7 @@ execSync("npm run build", { stdio: "inherit" });
 
 // Git commit + tag + push
 execSync(`git add package.json manifest.json main.js styles.css`);
-execSync(`git commit -m "chore: release v${version}"`);
+execSync(`git commit -m "v${version}"`);
 execSync(`git tag v${version}`);
 execSync(`git push && git push --tags`);
 
