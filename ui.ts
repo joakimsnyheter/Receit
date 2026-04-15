@@ -9,8 +9,18 @@ export interface ReceiptDocumentMeta {
   updatedAt: string;
 }
 
+function parseReadAt(raw: string): Date {
+  // Stored format in frontmatter is "YYYY-MM-DD HH:mm:ss" (UTC without "Z").
+  // Parse it explicitly as UTC to avoid local timezone drift in the UI.
+  const utcNoZonePattern = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/;
+  if (utcNoZonePattern.test(raw)) {
+    return new Date(raw.replace(" ", "T") + "Z");
+  }
+  return new Date(raw);
+}
+
 export function formatTimestamp(raw: string, format: DateFormat): string {
-  const d = new Date(raw);
+  const d = parseReadAt(raw);
   if (isNaN(d.getTime())) return raw;
   switch (format) {
     case "iso":
@@ -48,7 +58,7 @@ export function formatTimestamp(raw: string, format: DateFormat): string {
 }
 
 export function formatTooltip(raw: string): string {
-  const d = new Date(raw);
+  const d = parseReadAt(raw);
   if (isNaN(d.getTime())) return raw;
   return d.toLocaleString("sv-SE", {
     weekday: "long",
@@ -66,8 +76,8 @@ function sortEntries(
   order: "newest" | "oldest"
 ): ReadReceiptEntry[] {
   return [...entries].sort((a, b) => {
-    const aTime = new Date(a.readAt).getTime();
-    const bTime = new Date(b.readAt).getTime();
+    const aTime = parseReadAt(a.readAt).getTime();
+    const bTime = parseReadAt(b.readAt).getTime();
     return order === "newest" ? bTime - aTime : aTime - bTime;
   });
 }
