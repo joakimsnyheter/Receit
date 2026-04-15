@@ -95,8 +95,8 @@ export async function toggleReceipt(
 function serializeEntry(entry: ReadReceiptEntry): string {
   const d = new Date(entry.readAt);
   if (isNaN(d.getTime())) return `${entry.user}: ${entry.readAt}`;
-  // Format: "2026-04-11 13:56" - readable in properties panel and sorts correctly
-  const date = d.toISOString().slice(0, 16).replace("T", " ");
+  // Format with seconds so repeated reads within the same minute are visible.
+  const date = d.toISOString().slice(0, 19).replace("T", " ");
   return `${entry.user}: ${date}`;
 }
 

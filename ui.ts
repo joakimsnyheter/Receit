@@ -14,7 +14,7 @@ export function formatTimestamp(raw: string, format: DateFormat): string {
   if (isNaN(d.getTime())) return raw;
   switch (format) {
     case "iso":
-      return d.toISOString().slice(0, 16).replace("T", " ");
+      return d.toISOString().slice(0, 19).replace("T", " ");
     case "eu":
       return (
         d.toLocaleDateString("sv-SE", {
@@ -23,7 +23,11 @@ export function formatTimestamp(raw: string, format: DateFormat): string {
           day: "2-digit",
         }) +
         " " +
-        d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })
+        d.toLocaleTimeString("sv-SE", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
       );
     case "short":
     default:
@@ -34,7 +38,11 @@ export function formatTimestamp(raw: string, format: DateFormat): string {
           day: "numeric",
         }) +
         ", " +
-        d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })
+        d.toLocaleTimeString("sv-SE", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
       );
   }
 }
@@ -69,7 +77,8 @@ export function renderReceiptPanel(
   entries: ReadReceiptEntry[],
   settings: ReadReceiptPluginSettings,
   currentUser: string,
-  onToggle: () => void,
+  onMarkOrRefresh: () => void,
+  onUnmark: () => void,
   documentMeta?: ReceiptDocumentMeta
 ): void {
   container.empty();
@@ -79,12 +88,21 @@ export function renderReceiptPanel(
 
   const inner = container.createDiv("rr-inner");
 
-  // Toggle button
+  // Primary action always marks/refreshes read timestamp.
   const btn = inner.createEl("button", {
-    cls: userHasRead ? "rr-btn rr-btn--unmark" : "rr-btn rr-btn--mark",
-    text: userHasRead ? "Unmark as read" : "Mark as read",
+    cls: "rr-btn rr-btn--mark",
+    text: userHasRead ? "Refresh read time" : "Mark as read",
   });
-  btn.addEventListener("click", onToggle);
+  btn.addEventListener("click", onMarkOrRefresh);
+
+  // Keep explicit unmark action without making refresh depend on toggle.
+  if (userHasRead) {
+    const unmarkBtn = inner.createEl("button", {
+      cls: "rr-btn rr-btn--unmark",
+      text: "Unmark as read",
+    });
+    unmarkBtn.addEventListener("click", onUnmark);
+  }
 
   if (documentMeta) {
     const metaEl = inner.createDiv("rr-doc-meta");

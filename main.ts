@@ -426,7 +426,10 @@ export default class ReadReceiptPlugin extends Plugin {
           this.settings,
           this.settings.userName,
           () => {
-            this.toggleCurrentNote();
+            this.markCurrentNote();
+          },
+          () => {
+            this.unmarkCurrentNote();
           },
           documentMeta
         );
@@ -441,7 +444,10 @@ export default class ReadReceiptPlugin extends Plugin {
         this.settings,
         this.settings.userName,
         () => {
-          this.toggleCurrentNote();
+          this.markCurrentNote();
+        },
+        () => {
+          this.unmarkCurrentNote();
         },
         documentMeta
       );
