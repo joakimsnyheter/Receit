@@ -1,4 +1,13 @@
-import { ReadReceiptEntry, ReadReceiptPluginSettings, DateFormat } from "./types";
+import {
+  ReadReceiptEntry,
+  ReadReceiptPluginSettings,
+  DateFormat,
+} from "./types";
+
+export interface ReceiptDocumentMeta {
+  author: string | null;
+  updatedAt: string;
+}
 
 export function formatTimestamp(raw: string, format: DateFormat): string {
   const d = new Date(raw);
@@ -8,14 +17,22 @@ export function formatTimestamp(raw: string, format: DateFormat): string {
       return d.toISOString().slice(0, 16).replace("T", " ");
     case "eu":
       return (
-        d.toLocaleDateString("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit" }) +
+        d.toLocaleDateString("sv-SE", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }) +
         " " +
         d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })
       );
     case "short":
     default:
       return (
-        d.toLocaleDateString("sv-SE", { year: "numeric", month: "short", day: "numeric" }) +
+        d.toLocaleDateString("sv-SE", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        }) +
         ", " +
         d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })
       );
@@ -52,7 +69,8 @@ export function renderReceiptPanel(
   entries: ReadReceiptEntry[],
   settings: ReadReceiptPluginSettings,
   currentUser: string,
-  onToggle: () => void
+  onToggle: () => void,
+  documentMeta?: ReceiptDocumentMeta
 ): void {
   container.empty();
 
@@ -67,6 +85,19 @@ export function renderReceiptPanel(
     text: userHasRead ? "Unmark as read" : "Mark as read",
   });
   btn.addEventListener("click", onToggle);
+
+  if (documentMeta) {
+    const metaEl = inner.createDiv("rr-doc-meta");
+    const authorText = documentMeta.author?.trim()
+      ? documentMeta.author
+      : "Unknown";
+
+    metaEl.createSpan({ cls: "rr-doc-meta-item", text: `Author: ${authorText}` });
+    metaEl.createSpan({
+      cls: "rr-doc-meta-item",
+      text: `Updated: ${formatTimestamp(documentMeta.updatedAt, settings.dateFormat)}`,
+    });
+  }
 
   // No readers yet
   if (sorted.length === 0) {
@@ -108,4 +139,3 @@ export function renderReceiptPanel(
     }
   }
 }
-

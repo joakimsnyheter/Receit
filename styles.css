@@ -49,10 +49,26 @@
   color: var(--background-primary);
 }
 
-/* Divider between button and readers */
+/* Divider between button and info blocks */
+.rr-inner > .rr-doc-meta,
 .rr-inner > .rr-readers {
   border-left: 1px solid var(--background-modifier-border);
   padding-left: 12px;
+}
+
+/* Document metadata -------------------------------------------------------- */
+
+.rr-doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rr-doc-meta-item {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
 }
 
 /* Readers list ------------------------------------------------------------- */
@@ -97,12 +113,16 @@
   padding: 3px 10px;
   font-size: 12px;
   line-height: 1.4;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .rr-chip--you {
   border-color: var(--interactive-accent);
-  background: color-mix(in srgb, var(--interactive-accent) 8%, var(--background-primary));
+  background: color-mix(
+    in srgb,
+    var(--interactive-accent) 8%,
+    var(--background-primary)
+  );
 }
 
 .rr-chip-name {

@@ -31,6 +31,31 @@ export class ReadReceiptSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Badge color")
+      .setDesc("Din personliga färg på ditt namnchip i panelen. Klicka för att välja.")
+      .addColorPicker((cp) =>
+        cp
+          .setValue(this.plugin.settings.badgeColor || "#7c3aed")
+          .onChange(async (value) => {
+            this.plugin.settings.badgeColor = value;
+            await this.plugin.saveSettings();
+            this.plugin.applyBadgeColorStyle();
+            this.plugin.refreshUI();
+          })
+      )
+      .addExtraButton((btn) =>
+        btn
+          .setIcon("rotate-ccw")
+          .setTooltip("Återställ till temafärg")
+          .onClick(async () => {
+            this.plugin.settings.badgeColor = "";
+            await this.plugin.saveSettings();
+            this.plugin.refreshUI();
+            this.display();
+          })
+      );
+
+    new Setting(containerEl)
       .setName("Frontmatter field name")
       .setDesc("YAML field name where read receipts are stored.")
       .addText((text) =>

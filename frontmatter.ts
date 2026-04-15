@@ -26,7 +26,7 @@ export function getReceipts(
       if (idx > 0) {
         result.push({ user: item.slice(0, idx), readAt: item.slice(idx + 2) });
       }
-    // Legacy object format: { user, readAt } — migrate transparently
+      // Legacy object format: { user, readAt } - migrate transparently
     } else if (
       typeof item === "object" &&
       item !== null &&
@@ -44,15 +44,25 @@ export async function addReceipt(
   file: TFile,
   fieldName: string,
   userName: string
-): Promise<void> {
+): Promise<"added" | "updated"> {
   const existing = getReceipts(app, file, fieldName);
-  if (existing.some((e) => e.user === userName)) return; // deduplicate
+  const existingIndex = existing.findIndex((e) => e.user === userName);
+  const nowIso = new Date().toISOString();
+
+  if (existingIndex >= 0) {
+    const updated = existing.map((entry, index) =>
+      index === existingIndex ? { ...entry, readAt: nowIso } : entry
+    );
+    await writeReceipts(app, file, fieldName, updated);
+    return "updated";
+  }
 
   const updated: ReadReceiptEntry[] = [
     ...existing,
-    { user: userName, readAt: new Date().toISOString() },
+    { user: userName, readAt: nowIso },
   ];
   await writeReceipts(app, file, fieldName, updated);
+  return "added";
 }
 
 export async function removeReceipt(
@@ -83,8 +93,11 @@ export async function toggleReceipt(
 }
 
 function serializeEntry(entry: ReadReceiptEntry): string {
-  // Always store ISO timestamp — display formatting happens in the UI layer
-  return `${entry.user}: ${entry.readAt}`;
+  const d = new Date(entry.readAt);
+  if (isNaN(d.getTime())) return `${entry.user}: ${entry.readAt}`;
+  // Format: "2026-04-11 13:56" - readable in properties panel and sorts correctly
+  const date = d.toISOString().slice(0, 16).replace("T", " ");
+  return `${entry.user}: ${date}`;
 }
 
 async function writeReceipts(

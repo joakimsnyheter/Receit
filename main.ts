@@ -1,7 +1,7 @@
 import { MarkdownView, Notice, Plugin, TFile } from "obsidian";
 import { ReadReceiptPluginSettings, DEFAULT_SETTINGS } from "./types";
 import { getReceipts, toggleReceipt, addReceipt, removeReceipt } from "./frontmatter";
-import { renderReceiptPanel, formatTimestamp } from "./ui";
+import { renderReceiptPanel, formatTimestamp, ReceiptDocumentMeta } from "./ui";
 import { ReadReceiptSettingTab } from "./settings";
 
 const PANEL_CLASS = "read-receipt-panel";
@@ -17,6 +17,7 @@ export default class ReadReceiptPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
     this.addSettingTab(new ReadReceiptSettingTab(this.app, this));
+    this.applyBadgeColorStyle();
 
     if (this.settings.enableRibbonIcon) {
       this.addRibbonIcon("bookmark-check", "Mark as read", () => {
@@ -100,7 +101,7 @@ export default class ReadReceiptPlugin extends Plugin {
       })
     );
 
-    // React to frontmatter changes — fires when a file is saved or synced
+    // React to frontmatter changes - fires when a file is saved or synced
     this.registerEvent(
       this.app.metadataCache.on("changed", (file) => {
         const activeFile = this.getActiveMarkdownFile();
@@ -130,6 +131,7 @@ export default class ReadReceiptPlugin extends Plugin {
 
   onunload() {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    document.getElementById("receit-dynamic-style")?.remove();
     document.querySelectorAll(`.${PANEL_CLASS}`).forEach((el) => el.remove());
   }
 
@@ -150,11 +152,52 @@ export default class ReadReceiptPlugin extends Plugin {
   private requireUserName(): boolean {
     if (!this.settings.userName) {
       new Notice(
-        "Read Receipt: Please set your user name in plugin settings (Settings → Read Receipt)."
+        "Read Receipt: Please set your user name in plugin settings (Settings -> Read Receipt)."
       );
       return false;
     }
     return true;
+  }
+
+  private normalizeAuthorValue(value: unknown): string | null {
+    if (typeof value === "string") {
+      const name = value.trim();
+      return name.length > 0 ? name : null;
+    }
+
+    if (Array.isArray(value)) {
+      const names = value
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0);
+
+      return names.length > 0 ? names.join(", ") : null;
+    }
+
+    return null;
+  }
+
+  private getDocumentMeta(file: TFile): ReceiptDocumentMeta {
+    const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter as
+      | Record<string, unknown>
+      | undefined;
+    const authorKeys = ["author", "authors", "owner", "created_by", "createdBy"];
+    let author: string | null = null;
+
+    if (frontmatter) {
+      for (const key of authorKeys) {
+        const parsed = this.normalizeAuthorValue(frontmatter[key]);
+        if (parsed) {
+          author = parsed;
+          break;
+        }
+      }
+    }
+
+    return {
+      author,
+      updatedAt: new Date(file.stat.mtime).toISOString(),
+    };
   }
 
   async markCurrentNote(): Promise<void> {
@@ -164,13 +207,14 @@ export default class ReadReceiptPlugin extends Plugin {
       new Notice("Read Receipt: No active markdown file.");
       return;
     }
-    const receipts = getReceipts(this.app, file, this.settings.fieldName);
-    if (receipts.some((e) => e.user === this.settings.userName)) {
-      new Notice("Read Receipt: Already marked as read.");
-      return;
-    }
-    await addReceipt(this.app, file, this.settings.fieldName, this.settings.userName);
-    new Notice("Marked as read");
+
+    const result = await addReceipt(
+      this.app,
+      file,
+      this.settings.fieldName,
+      this.settings.userName
+    );
+    new Notice(result === "added" ? "Marked as read" : "Updated latest read time");
   }
 
   async unmarkCurrentNote(): Promise<void> {
@@ -215,21 +259,32 @@ export default class ReadReceiptPlugin extends Plugin {
   async markAllOpenTabs(): Promise<void> {
     if (!this.requireUserName()) return;
     const leaves = this.app.workspace.getLeavesOfType("markdown");
-    let count = 0;
+    let added = 0;
+    let updated = 0;
+
     for (const leaf of leaves) {
       const view = leaf.view as MarkdownView;
       const file = view.file;
       if (file && file.extension === "md") {
-        await addReceipt(
+        const result = await addReceipt(
           this.app,
           file,
           this.settings.fieldName,
           this.settings.userName
         );
-        count++;
+
+        if (result === "added") {
+          added++;
+        } else {
+          updated++;
+        }
       }
     }
-    new Notice(`Marked ${count} note${count !== 1 ? "s" : ""} as read`);
+
+    const total = added + updated;
+    new Notice(
+      `Updated ${total} note${total !== 1 ? "s" : ""} as read (${added} new, ${updated} refreshed)`
+    );
   }
 
   async copyReadersList(): Promise<void> {
@@ -277,6 +332,31 @@ export default class ReadReceiptPlugin extends Plugin {
     this.knownReaders.set(file.path, new Set(entries.map((e) => e.user)));
   }
 
+  applyBadgeColorStyle(): void {
+    document.getElementById("receit-dynamic-style")?.remove();
+    const color = this.settings.badgeColor;
+    const field = this.settings.fieldName;
+
+    const css: string[] = [
+      // Bold the frontmatter property entries in Obsidian's properties panel
+      `.metadata-property[data-property-key="${field}"] .multi-select-pill { font-weight: 700; }`,
+      `.metadata-property[data-property-key="${field}"] .metadata-property-value { font-weight: 700; }`,
+    ];
+
+    if (color) {
+      css.push(
+        `.rr-chip--you { border-color: ${color} !important; background: ${color}22 !important; }`,
+        `.rr-chip--you .rr-chip-name { color: ${color} !important; }`,
+        `.metadata-property[data-property-key="${field}"] .multi-select-pill { color: ${color}; border-color: ${color}88; }`
+      );
+    }
+
+    const style = document.createElement("style");
+    style.id = "receit-dynamic-style";
+    style.textContent = css.join("\n");
+    document.head.appendChild(style);
+  }
+
   // Debounce so rapid events (vault modify + metadataCache.changed) only trigger one redraw
   private scheduleRefresh(): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
@@ -317,6 +397,7 @@ export default class ReadReceiptPlugin extends Plugin {
   }
 
   refreshUI(): void {
+    this.applyBadgeColorStyle();
     // Remove all existing panels first
     document.querySelectorAll(`.${PANEL_CLASS}`).forEach((el) => el.remove());
 
@@ -329,6 +410,7 @@ export default class ReadReceiptPlugin extends Plugin {
     if (!file || file.extension !== "md") return;
 
     const entries = getReceipts(this.app, file, this.settings.fieldName);
+    const documentMeta = this.getDocumentMeta(file);
 
     // Insert panel into both editing and reading mode containers
     const targets = view.contentEl.querySelectorAll(
@@ -338,17 +420,31 @@ export default class ReadReceiptPlugin extends Plugin {
       targets.forEach((target) => {
         const panel = createDiv(PANEL_CLASS);
         target.parentElement?.insertBefore(panel, target);
-        renderReceiptPanel(panel, entries, this.settings, this.settings.userName, () => {
-          this.toggleCurrentNote();
-        });
+        renderReceiptPanel(
+          panel,
+          entries,
+          this.settings,
+          this.settings.userName,
+          () => {
+            this.toggleCurrentNote();
+          },
+          documentMeta
+        );
       });
     } else {
       // Fallback: insert at top of contentEl
       const panel = view.contentEl.createDiv(PANEL_CLASS);
       view.contentEl.insertBefore(panel, view.contentEl.firstChild);
-      renderReceiptPanel(panel, entries, this.settings, this.settings.userName, () => {
-        this.toggleCurrentNote();
-      });
+      renderReceiptPanel(
+        panel,
+        entries,
+        this.settings,
+        this.settings.userName,
+        () => {
+          this.toggleCurrentNote();
+        },
+        documentMeta
+      );
     }
   }
 }
