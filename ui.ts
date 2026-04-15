@@ -10,11 +10,19 @@ export interface ReceiptDocumentMeta {
 }
 
 function parseReadAt(raw: string): Date {
-  // Stored format in frontmatter is "YYYY-MM-DD HH:mm:ss" (UTC without "Z").
-  // Parse it explicitly as UTC to avoid local timezone drift in the UI.
-  const utcNoZonePattern = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/;
-  if (utcNoZonePattern.test(raw)) {
-    return new Date(raw.replace(" ", "T") + "Z");
+  // Current stored format in frontmatter is local wall time without timezone.
+  const localNoZonePattern = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/;
+  const m = raw.match(localNoZonePattern);
+  if (m) {
+    const [, y, mo, d, h, mi, s] = m;
+    return new Date(
+      Number(y),
+      Number(mo) - 1,
+      Number(d),
+      Number(h),
+      Number(mi),
+      Number(s ?? "0")
+    );
   }
   return new Date(raw);
 }

@@ -1,6 +1,20 @@
 import { App, TFile, Notice } from "obsidian";
 import { ReadReceiptEntry } from "./types";
 
+function parseStoredReadAt(raw: string): Date {
+  // Legacy/frontmatter format without zone has historically represented UTC.
+  // Interpret as UTC so we can migrate and rewrite as local wall time.
+  const utcNoZonePattern = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/;
+  if (utcNoZonePattern.test(raw)) {
+    return new Date(raw.replace(" ", "T") + "Z");
+  }
+  return new Date(raw);
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
 export function getReceipts(
   app: App,
   file: TFile,
@@ -93,10 +107,12 @@ export async function toggleReceipt(
 }
 
 function serializeEntry(entry: ReadReceiptEntry): string {
-  const d = new Date(entry.readAt);
+  const d = parseStoredReadAt(entry.readAt);
   if (isNaN(d.getTime())) return `${entry.user}: ${entry.readAt}`;
-  // Format with seconds so repeated reads within the same minute are visible.
-  const date = d.toISOString().slice(0, 19).replace("T", " ");
+  // Store local wall time so Obsidian properties and panel show the same clock time.
+  const date =
+    `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ` +
+    `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
   return `${entry.user}: ${date}`;
 }
 
