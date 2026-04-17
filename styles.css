@@ -71,6 +71,27 @@
   font-weight: 500;
 }
 
+.rr-doc-meta-item--author {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rr-author-btn {
+  border: none;
+  background: transparent;
+  color: var(--interactive-accent);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.rr-author-btn:hover {
+  color: var(--text-accent-hover);
+}
+
 /* Readers list ------------------------------------------------------------- */
 
 .rr-readers {

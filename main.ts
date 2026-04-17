@@ -8,6 +8,7 @@ const PANEL_CLASS = "read-receipt-panel";
 const DEBOUNCE_MS = 150;
 const LOCAL_USERNAME_KEY = "receit-user-name";
 const LOCAL_BADGE_COLOR_KEY = "receit-badge-color";
+const AUTHOR_KEYS = ["author", "authors", "owner", "created_by", "createdBy"];
 
 function withAlpha(color: string, alphaHex: string): string | null {
   const hex = color.trim();
@@ -15,6 +16,10 @@ function withAlpha(color: string, alphaHex: string): string | null {
     return `${hex}${alphaHex}`;
   }
   return null;
+}
+
+function userKey(value: string): string {
+  return value.trim().toLocaleLowerCase();
 }
 
 export default class ReadReceiptPlugin extends Plugin {
@@ -75,6 +80,16 @@ export default class ReadReceiptPlugin extends Plugin {
       checkCallback: (checking) => {
         if (!this.getActiveMarkdownFile()) return false;
         if (!checking) this.showReaders();
+        return true;
+      },
+    });
+
+    this.addCommand({
+      id: "change-document-author",
+      name: "Change document author",
+      checkCallback: (checking) => {
+        if (!this.getActiveMarkdownFile()) return false;
+        if (!checking) this.changeAuthorForCurrentNote();
         return true;
       },
     });
@@ -147,7 +162,16 @@ export default class ReadReceiptPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-    this.settings.userColors = this.settings.userColors ?? {};
+    const rawUserColors = this.settings.userColors ?? {};
+    const normalizedUserColors: Record<string, string> = {};
+    for (const [name, color] of Object.entries(rawUserColors)) {
+      if (typeof color !== "string") continue;
+      const key = userKey(name);
+      const trimmedColor = color.trim();
+      if (!key || !trimmedColor) continue;
+      normalizedUserColors[key] = trimmedColor;
+    }
+    this.settings.userColors = normalizedUserColors;
 
     const localUserName = this.loadLocalUserName();
     if (localUserName !== null) {
@@ -158,7 +182,7 @@ export default class ReadReceiptPlugin extends Plugin {
     if (localBadgeColor !== null) {
       this.settings.badgeColor = localBadgeColor;
     } else if (this.settings.userName) {
-      this.settings.badgeColor = this.settings.userColors[this.settings.userName] ?? "";
+      this.settings.badgeColor = this.getUserColor(this.settings.userName);
     }
 
     let migrated = false;
@@ -195,23 +219,29 @@ export default class ReadReceiptPlugin extends Plugin {
     await this.saveData({ ...this.settings, userName: "", badgeColor: "" });
   }
 
+  getUserColor(name: string): string {
+    const key = userKey(name);
+    if (!key) return "";
+    return this.settings.userColors[key] ?? "";
+  }
+
   private upsertCurrentUserColor(): boolean {
-    const user = this.settings.userName.trim();
-    if (!user) return false;
+    const key = userKey(this.settings.userName);
+    if (!key) return false;
 
     const color = this.settings.badgeColor.trim();
-    const previous = this.settings.userColors[user];
+    const previous = this.settings.userColors[key];
 
     if (!color) {
       if (previous !== undefined) {
-        delete this.settings.userColors[user];
+        delete this.settings.userColors[key];
         return true;
       }
       return false;
     }
 
     if (previous !== color) {
-      this.settings.userColors[user] = color;
+      this.settings.userColors[key] = color;
       return true;
     }
 
@@ -287,27 +317,77 @@ export default class ReadReceiptPlugin extends Plugin {
     return null;
   }
 
+  private getAuthorFromFrontmatter(
+    frontmatter: Record<string, unknown> | undefined
+  ): string | null {
+    if (!frontmatter) return null;
+    for (const key of AUTHOR_KEYS) {
+      const parsed = this.normalizeAuthorValue(frontmatter[key]);
+      if (parsed) return parsed;
+    }
+    return null;
+  }
+
   private getDocumentMeta(file: TFile): ReceiptDocumentMeta {
     const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter as
       | Record<string, unknown>
       | undefined;
-    const authorKeys = ["author", "authors", "owner", "created_by", "createdBy"];
-    let author: string | null = null;
-
-    if (frontmatter) {
-      for (const key of authorKeys) {
-        const parsed = this.normalizeAuthorValue(frontmatter[key]);
-        if (parsed) {
-          author = parsed;
-          break;
-        }
-      }
+    let author = this.getAuthorFromFrontmatter(frontmatter);
+    if (!author) {
+      author = this.settings.userName.trim() || null;
     }
 
     return {
       author,
       updatedAt: new Date(file.stat.mtime).toISOString(),
     };
+  }
+
+  private async ensureAuthorForFile(file: TFile): Promise<void> {
+    const fallbackAuthor = this.settings.userName.trim();
+    if (!fallbackAuthor) return;
+
+    const cache = this.app.metadataCache.getFileCache(file);
+    const existingAuthor = this.getAuthorFromFrontmatter(
+      cache?.frontmatter as Record<string, unknown> | undefined
+    );
+    if (existingAuthor) return;
+
+    await this.app.fileManager.processFrontMatter(file, (fm) => {
+      const current = this.getAuthorFromFrontmatter(fm as Record<string, unknown>);
+      if (!current) {
+        fm.author = fallbackAuthor;
+      }
+    });
+  }
+
+  async changeAuthorForCurrentNote(): Promise<void> {
+    const file = this.getActiveMarkdownFile();
+    if (!file) {
+      new Notice("Read Receipt: No active markdown file.");
+      return;
+    }
+
+    const currentAuthor = this.getDocumentMeta(file).author ?? "";
+    const fallback = this.settings.userName.trim();
+    const defaultValue = currentAuthor || fallback;
+    const nextAuthor = window.prompt("Receit: Change author", defaultValue);
+    if (nextAuthor === null) return;
+
+    const trimmed = nextAuthor.trim();
+    try {
+      await this.app.fileManager.processFrontMatter(file, (fm) => {
+        if (trimmed) {
+          fm.author = trimmed;
+        } else {
+          delete fm.author;
+        }
+      });
+      new Notice(trimmed ? `Receit: Author set to ${trimmed}` : "Receit: Author cleared");
+      this.refreshUI();
+    } catch (err) {
+      new Notice(`Receit: Could not change author. ${err}`);
+    }
   }
 
   async markCurrentNote(): Promise<void> {
@@ -319,6 +399,7 @@ export default class ReadReceiptPlugin extends Plugin {
     }
 
     await this.persistCurrentUserColor();
+    await this.ensureAuthorForFile(file);
 
     const result = await addReceipt(
       this.app,
@@ -378,6 +459,7 @@ export default class ReadReceiptPlugin extends Plugin {
       const view = leaf.view as MarkdownView;
       const file = view.file;
       if (file && file.extension === "md") {
+        await this.ensureAuthorForFile(file);
         const result = await addReceipt(
           this.app,
           file,
@@ -434,14 +516,21 @@ export default class ReadReceiptPlugin extends Plugin {
     if (!this.settings.notifyOnNewReader) return;
     const entries = getReceipts(this.app, file, this.settings.fieldName);
     const known = this.knownReaders.get(file.path) ?? new Set<string>();
+    const currentUserKey = userKey(this.settings.userName);
     const newReaders = entries.filter(
-      (e) => e.user !== this.settings.userName && !known.has(e.user)
+      (e) => {
+        const key = userKey(e.user);
+        return !!key && key !== currentUserKey && !known.has(key);
+      }
     );
     if (newReaders.length > 0) {
       const names = newReaders.map((e) => e.user).join(", ");
       new Notice(`Receit: ${names} just read this note`);
     }
-    this.knownReaders.set(file.path, new Set(entries.map((e) => e.user)));
+    this.knownReaders.set(
+      file.path,
+      new Set(entries.map((e) => userKey(e.user)).filter(Boolean))
+    );
   }
 
   applyBadgeColorStyle(): void {
@@ -470,8 +559,8 @@ export default class ReadReceiptPlugin extends Plugin {
       const idx = text.indexOf(": ");
       const user = idx > 0 ? text.slice(0, idx).trim() : text;
       const color =
-        this.settings.userColors[user] ??
-        (user === this.settings.userName ? this.settings.badgeColor : "");
+        this.getUserColor(user) ||
+        (userKey(user) === userKey(this.settings.userName) ? this.settings.badgeColor : "");
 
       if (!color) {
         pill.style.removeProperty("color");
@@ -511,8 +600,9 @@ export default class ReadReceiptPlugin extends Plugin {
     }
     const entries = getReceipts(this.app, file, this.settings.fieldName);
     const count = entries.length;
-    const hasRead = this.settings.userName
-      ? entries.some((e) => e.user === this.settings.userName)
+    const currentUserKey = userKey(this.settings.userName);
+    const hasRead = currentUserKey
+      ? entries.some((e) => userKey(e.user) === currentUserKey)
       : false;
 
     if (count === 0) {
@@ -530,8 +620,9 @@ export default class ReadReceiptPlugin extends Plugin {
 
   refreshUI(): void {
     this.applyBadgeColorStyle();
-    // Delay to ensure Properties DOM is present before applying per-user colors.
-    window.setTimeout(() => this.applyReceiptPropertyColors(), 0);
+    [0, 120, 500].forEach((delay) =>
+      window.setTimeout(() => this.applyReceiptPropertyColors(), delay)
+    );
     // Remove all existing panels first
     document.querySelectorAll(`.${PANEL_CLASS}`).forEach((el) => el.remove());
 
@@ -542,6 +633,9 @@ export default class ReadReceiptPlugin extends Plugin {
 
     const file = view.file;
     if (!file || file.extension !== "md") return;
+    void this.ensureAuthorForFile(file).catch((err) => {
+      new Notice(`Receit: Could not set author automatically. ${err}`);
+    });
 
     const entries = getReceipts(this.app, file, this.settings.fieldName);
     const documentMeta = this.getDocumentMeta(file);
@@ -565,6 +659,9 @@ export default class ReadReceiptPlugin extends Plugin {
           () => {
             this.unmarkCurrentNote();
           },
+          () => {
+            this.changeAuthorForCurrentNote();
+          },
           documentMeta
         );
       });
@@ -582,6 +679,9 @@ export default class ReadReceiptPlugin extends Plugin {
         },
         () => {
           this.unmarkCurrentNote();
+        },
+        () => {
+          this.changeAuthorForCurrentNote();
         },
         documentMeta
       );

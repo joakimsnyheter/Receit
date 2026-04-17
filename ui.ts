@@ -17,6 +17,19 @@ function withAlpha(color: string, alphaHex: string): string | null {
   return null;
 }
 
+function userKey(value: string): string {
+  return value.trim().toLocaleLowerCase();
+}
+
+function resolveUserColor(
+  settings: ReadReceiptPluginSettings,
+  userName: string
+): string {
+  const key = userKey(userName);
+  if (!key) return "";
+  return settings.userColors[userName] ?? settings.userColors[key] ?? "";
+}
+
 function parseReadAt(raw: string): Date {
   // Current stored format in frontmatter is local wall time without timezone.
   const localNoZonePattern = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/;
@@ -105,12 +118,14 @@ export function renderReceiptPanel(
   currentUser: string,
   onMarkOrRefresh: () => void,
   onUnmark: () => void,
+  onChangeAuthor: () => void,
   documentMeta?: ReceiptDocumentMeta
 ): void {
   container.empty();
 
   const sorted = sortEntries(entries, settings.sortOrder);
-  const userHasRead = entries.some((e) => e.user === currentUser);
+  const currentUserKey = userKey(currentUser);
+  const userHasRead = !!currentUserKey && entries.some((e) => userKey(e.user) === currentUserKey);
 
   const inner = container.createDiv("rr-inner");
 
@@ -136,7 +151,20 @@ export function renderReceiptPanel(
       ? documentMeta.author
       : "Unknown";
 
-    metaEl.createSpan({ cls: "rr-doc-meta-item", text: `Author: ${authorText}` });
+    const authorItem = metaEl.createDiv("rr-doc-meta-item rr-doc-meta-item--author");
+    authorItem.createSpan({ text: "Author: " });
+    const authorBtn = authorItem.createEl("button", {
+      cls: "rr-author-btn",
+      text: authorText,
+    });
+    authorBtn.type = "button";
+    authorBtn.setAttribute("aria-label", "Change document author");
+    authorBtn.setAttribute("title", "Click to change author");
+    authorBtn.addEventListener("click", (evt) => {
+      evt.preventDefault();
+      onChangeAuthor();
+    });
+
     metaEl.createSpan({
       cls: "rr-doc-meta-item",
       text: `Updated: ${formatTimestamp(documentMeta.updatedAt, settings.dateFormat)}`,
@@ -163,7 +191,7 @@ export function renderReceiptPanel(
   readersEl.createSpan({ cls: "rr-label", text: "Read by:" });
 
   for (const entry of sorted) {
-    const isYou = entry.user === currentUser;
+    const isYou = userKey(entry.user) === currentUserKey;
     const chip = readersEl.createDiv(isYou ? "rr-chip rr-chip--you" : "rr-chip");
 
     // Tooltip with full timestamp on hover
@@ -175,8 +203,7 @@ export function renderReceiptPanel(
       text: isYou ? `${entry.user} (you)` : entry.user,
     });
 
-    const chipColor =
-      settings.userColors[entry.user] ?? (isYou ? settings.badgeColor : "");
+    const chipColor = resolveUserColor(settings, entry.user) || (isYou ? settings.badgeColor : "");
 
     if (chipColor) {
       chip.style.setProperty("border-color", chipColor, "important");

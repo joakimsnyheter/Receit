@@ -1,6 +1,10 @@
 import { App, TFile, Notice } from "obsidian";
 import { ReadReceiptEntry } from "./types";
 
+function userKey(value: string): string {
+  return value.trim().toLocaleLowerCase();
+}
+
 function parseStoredReadAt(raw: string): Date {
   // Legacy/frontmatter format without zone has historically represented UTC.
   // Interpret as UTC so we can migrate and rewrite as local wall time.
@@ -60,7 +64,8 @@ export async function addReceipt(
   userName: string
 ): Promise<"added" | "updated"> {
   const existing = getReceipts(app, file, fieldName);
-  const existingIndex = existing.findIndex((e) => e.user === userName);
+  const currentUserKey = userKey(userName);
+  const existingIndex = existing.findIndex((e) => userKey(e.user) === currentUserKey);
   const nowIso = new Date().toISOString();
 
   if (existingIndex >= 0) {
@@ -86,7 +91,8 @@ export async function removeReceipt(
   userName: string
 ): Promise<void> {
   const existing = getReceipts(app, file, fieldName);
-  const updated = existing.filter((e) => e.user !== userName);
+  const currentUserKey = userKey(userName);
+  const updated = existing.filter((e) => userKey(e.user) !== currentUserKey);
   await writeReceipts(app, file, fieldName, updated);
 }
 
@@ -97,7 +103,8 @@ export async function toggleReceipt(
   userName: string
 ): Promise<"added" | "removed"> {
   const existing = getReceipts(app, file, fieldName);
-  if (existing.some((e) => e.user === userName)) {
+  const currentUserKey = userKey(userName);
+  if (existing.some((e) => userKey(e.user) === currentUserKey)) {
     await removeReceipt(app, file, fieldName, userName);
     return "removed";
   } else {
