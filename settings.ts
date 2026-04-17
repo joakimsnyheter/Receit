@@ -18,7 +18,7 @@ export class ReadReceiptSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("User name")
       .setDesc(
-        "Your display name used to identify you in read receipts. Required to mark notes as read."
+        "Your display name used to identify you in read receipts. Saved locally per device (not synced), required to mark notes as read."
       )
       .addText((text) =>
         text

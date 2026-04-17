@@ -6,6 +6,7 @@ import { ReadReceiptSettingTab } from "./settings";
 
 const PANEL_CLASS = "read-receipt-panel";
 const DEBOUNCE_MS = 150;
+const LOCAL_USERNAME_KEY = "receit-user-name";
 
 export default class ReadReceiptPlugin extends Plugin {
   settings: ReadReceiptPluginSettings;
@@ -137,10 +138,40 @@ export default class ReadReceiptPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+
+    const localUserName = this.loadLocalUserName();
+    if (localUserName !== null) {
+      this.settings.userName = localUserName;
+      return;
+    }
+
+    // Migrate legacy synced username into per-device local storage.
+    const syncedUserName = this.settings.userName.trim();
+    if (syncedUserName) {
+      this.settings.userName = syncedUserName;
+      this.saveLocalUserName(syncedUserName);
+      await this.saveData({ ...this.settings, userName: "" });
+    }
   }
 
   async saveSettings() {
-    await this.saveData(this.settings);
+    this.saveLocalUserName(this.settings.userName.trim());
+    await this.saveData({ ...this.settings, userName: "" });
+  }
+
+  private loadLocalUserName(): string | null {
+    const raw = this.app.loadLocalStorage(LOCAL_USERNAME_KEY);
+    if (typeof raw !== "string") return null;
+    const value = raw.trim();
+    return value.length > 0 ? value : null;
+  }
+
+  private saveLocalUserName(value: string): void {
+    const trimmed = value.trim();
+    this.app.saveLocalStorage(
+      LOCAL_USERNAME_KEY,
+      trimmed.length > 0 ? trimmed : null
+    );
   }
 
   private getActiveMarkdownFile(): TFile | null {
