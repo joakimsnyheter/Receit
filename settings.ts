@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type ReadReceiptPlugin from "./main";
 import { ReadReceiptPluginSettings } from "./types";
 
@@ -55,13 +55,13 @@ export class ReadReceiptSettingTab extends PluginSettingTab {
       )
       .addExtraButton((btn) =>
         btn
-          .setIcon("rotate-ccw")
-          .setTooltip("Återställ till temafärg")
+          .setIcon("refresh-cw")
+          .setTooltip("Uppdatera färg i kvitto och panel nu")
           .onClick(async () => {
-            this.plugin.settings.badgeColor = "";
             await this.plugin.saveSettings();
+            this.plugin.applyBadgeColorStyle();
             this.plugin.refreshUI();
-            this.display();
+            new Notice("Receit: Färg uppdaterad");
           })
       );
 
