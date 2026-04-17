@@ -32,7 +32,7 @@ export class ReadReceiptSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Badge color")
-      .setDesc("Din personliga färg på ditt namnchip i panelen. Klicka för att välja.")
+      .setDesc("Din personliga färg på ditt namnchip i panelen. Sparas lokalt per enhet (inte synkad).")
       .addColorPicker((cp) =>
         cp
           .setValue(this.plugin.settings.badgeColor || "#7c3aed")

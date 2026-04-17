@@ -9,6 +9,14 @@ export interface ReceiptDocumentMeta {
   updatedAt: string;
 }
 
+function withAlpha(color: string, alphaHex: string): string | null {
+  const hex = color.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+    return `${hex}${alphaHex}`;
+  }
+  return null;
+}
+
 function parseReadAt(raw: string): Date {
   // Current stored format in frontmatter is local wall time without timezone.
   const localNoZonePattern = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/;
@@ -162,16 +170,18 @@ export function renderReceiptPanel(
     chip.setAttribute("title", formatTooltip(entry.readAt));
     chip.setAttribute("aria-label", formatTooltip(entry.readAt));
 
-    chip.createSpan({
+    const nameEl = chip.createSpan({
       cls: "rr-chip-name",
       text: isYou ? `${entry.user} (you)` : entry.user,
     });
 
-    if (settings.displayMode === "full" && settings.showTimestamps) {
-      chip.createSpan({
-        cls: "rr-chip-ts",
-        text: formatTimestamp(entry.readAt, settings.dateFormat),
-      });
+    if (isYou && settings.badgeColor) {
+      chip.style.borderColor = settings.badgeColor;
+      const bg = withAlpha(settings.badgeColor, "22");
+      if (bg) chip.style.backgroundColor = bg;
+      nameEl.style.color = settings.badgeColor;
     }
+
+    // Keep chips compact for larger teams; exact read time is available in the tooltip.
   }
 }

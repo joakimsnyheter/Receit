@@ -7,6 +7,7 @@ import { ReadReceiptSettingTab } from "./settings";
 const PANEL_CLASS = "read-receipt-panel";
 const DEBOUNCE_MS = 150;
 const LOCAL_USERNAME_KEY = "receit-user-name";
+const LOCAL_BADGE_COLOR_KEY = "receit-badge-color";
 
 export default class ReadReceiptPlugin extends Plugin {
   settings: ReadReceiptPluginSettings;
@@ -142,21 +143,44 @@ export default class ReadReceiptPlugin extends Plugin {
     const localUserName = this.loadLocalUserName();
     if (localUserName !== null) {
       this.settings.userName = localUserName;
-      return;
     }
 
+    const localBadgeColor = this.loadLocalBadgeColor();
+    if (localBadgeColor !== null) {
+      this.settings.badgeColor = localBadgeColor;
+    }
+
+    let migrated = false;
+
     // Migrate legacy synced username into per-device local storage.
-    const syncedUserName = this.settings.userName.trim();
-    if (syncedUserName) {
-      this.settings.userName = syncedUserName;
-      this.saveLocalUserName(syncedUserName);
-      await this.saveData({ ...this.settings, userName: "" });
+    if (localUserName === null) {
+      const syncedUserName = this.settings.userName.trim();
+      if (syncedUserName) {
+        this.settings.userName = syncedUserName;
+        this.saveLocalUserName(syncedUserName);
+        migrated = true;
+      }
+    }
+
+    // Migrate legacy synced badge color into per-device local storage.
+    if (localBadgeColor === null) {
+      const syncedBadgeColor = this.settings.badgeColor.trim();
+      if (syncedBadgeColor) {
+        this.settings.badgeColor = syncedBadgeColor;
+        this.saveLocalBadgeColor(syncedBadgeColor);
+        migrated = true;
+      }
+    }
+
+    if (migrated) {
+      await this.saveData({ ...this.settings, userName: "", badgeColor: "" });
     }
   }
 
   async saveSettings() {
     this.saveLocalUserName(this.settings.userName.trim());
-    await this.saveData({ ...this.settings, userName: "" });
+    this.saveLocalBadgeColor(this.settings.badgeColor.trim());
+    await this.saveData({ ...this.settings, userName: "", badgeColor: "" });
   }
 
   private loadLocalUserName(): string | null {
@@ -170,6 +194,21 @@ export default class ReadReceiptPlugin extends Plugin {
     const trimmed = value.trim();
     this.app.saveLocalStorage(
       LOCAL_USERNAME_KEY,
+      trimmed.length > 0 ? trimmed : null
+    );
+  }
+
+  private loadLocalBadgeColor(): string | null {
+    const raw = this.app.loadLocalStorage(LOCAL_BADGE_COLOR_KEY);
+    if (typeof raw !== "string") return null;
+    const value = raw.trim();
+    return value.length > 0 ? value : null;
+  }
+
+  private saveLocalBadgeColor(value: string): void {
+    const trimmed = value.trim();
+    this.app.saveLocalStorage(
+      LOCAL_BADGE_COLOR_KEY,
       trimmed.length > 0 ? trimmed : null
     );
   }
@@ -377,8 +416,7 @@ export default class ReadReceiptPlugin extends Plugin {
     if (color) {
       css.push(
         `.rr-chip--you { border-color: ${color} !important; background: ${color}22 !important; }`,
-        `.rr-chip--you .rr-chip-name { color: ${color} !important; }`,
-        `.metadata-property[data-property-key="${field}"] .multi-select-pill { color: ${color}; border-color: ${color}88; }`
+        `.rr-chip--you .rr-chip-name { color: ${color} !important; }`
       );
     }
 
