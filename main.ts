@@ -9,6 +9,14 @@ const DEBOUNCE_MS = 150;
 const LOCAL_USERNAME_KEY = "receit-user-name";
 const LOCAL_BADGE_COLOR_KEY = "receit-badge-color";
 
+function withAlpha(color: string, alphaHex: string): string | null {
+  const hex = color.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+    return `${hex}${alphaHex}`;
+  }
+  return null;
+}
+
 export default class ReadReceiptPlugin extends Plugin {
   settings: ReadReceiptPluginSettings;
   private statusBarItem: HTMLElement | null = null;
@@ -452,6 +460,35 @@ export default class ReadReceiptPlugin extends Plugin {
     document.head.appendChild(style);
   }
 
+  private applyReceiptPropertyColors(): void {
+    const field = this.settings.fieldName;
+    const selector = `.metadata-property[data-property-key="${field}"] .multi-select-pill`;
+    const pills = document.querySelectorAll<HTMLElement>(selector);
+
+    pills.forEach((pill) => {
+      const text = (pill.textContent ?? "").trim();
+      const idx = text.indexOf(": ");
+      const user = idx > 0 ? text.slice(0, idx).trim() : text;
+      const color =
+        this.settings.userColors[user] ??
+        (user === this.settings.userName ? this.settings.badgeColor : "");
+
+      if (!color) {
+        pill.style.removeProperty("color");
+        pill.style.removeProperty("border-color");
+        pill.style.removeProperty("background-color");
+        return;
+      }
+
+      pill.style.setProperty("color", color, "important");
+      pill.style.setProperty("border-color", withAlpha(color, "88") ?? color, "important");
+      const bg = withAlpha(color, "22");
+      if (bg) {
+        pill.style.setProperty("background-color", bg, "important");
+      }
+    });
+  }
+
   // Debounce so rapid events (vault modify + metadataCache.changed) only trigger one redraw
   private scheduleRefresh(): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
@@ -493,6 +530,8 @@ export default class ReadReceiptPlugin extends Plugin {
 
   refreshUI(): void {
     this.applyBadgeColorStyle();
+    // Delay to ensure Properties DOM is present before applying per-user colors.
+    window.setTimeout(() => this.applyReceiptPropertyColors(), 0);
     // Remove all existing panels first
     document.querySelectorAll(`.${PANEL_CLASS}`).forEach((el) => el.remove());
 

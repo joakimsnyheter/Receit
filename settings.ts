@@ -26,9 +26,13 @@ export class ReadReceiptSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.userName)
           .onChange(async (value) => {
             this.plugin.settings.userName = value.trim();
-            this.plugin.settings.badgeColor = this.plugin.settings.userName
-              ? this.plugin.settings.userColors[this.plugin.settings.userName] ?? ""
-              : "";
+            if (this.plugin.settings.userName) {
+              const mappedColor =
+                this.plugin.settings.userColors[this.plugin.settings.userName];
+              if (mappedColor) {
+                this.plugin.settings.badgeColor = mappedColor;
+              }
+            }
             await this.plugin.saveSettings();
             this.plugin.applyBadgeColorStyle();
             this.plugin.refreshUI();
