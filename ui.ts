@@ -175,11 +175,14 @@ export function renderReceiptPanel(
       text: isYou ? `${entry.user} (you)` : entry.user,
     });
 
-    if (isYou && settings.badgeColor) {
-      chip.style.borderColor = settings.badgeColor;
-      const bg = withAlpha(settings.badgeColor, "22");
+    const chipColor =
+      settings.userColors[entry.user] ?? (isYou ? settings.badgeColor : "");
+
+    if (chipColor) {
+      chip.style.setProperty("border-color", chipColor, "important");
+      const bg = withAlpha(chipColor, "22");
       if (bg) chip.style.backgroundColor = bg;
-      nameEl.style.color = settings.badgeColor;
+      nameEl.style.setProperty("color", chipColor, "important");
     }
 
     // Keep chips compact for larger teams; exact read time is available in the tooltip.

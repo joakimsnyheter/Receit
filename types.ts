@@ -10,6 +10,7 @@ export type DateFormat = "short" | "iso" | "eu";
 export interface ReadReceiptPluginSettings {
   userName: string;
   badgeColor: string;
+  userColors: Record<string, string>;
   fieldName: string;
   showTimestamps: boolean;
   sortOrder: SortOrder;
@@ -24,6 +25,7 @@ export interface ReadReceiptPluginSettings {
 export const DEFAULT_SETTINGS: ReadReceiptPluginSettings = {
   userName: "",
   badgeColor: "",
+  userColors: {},
   fieldName: "read_receipts",
   showTimestamps: true,
   sortOrder: "newest",

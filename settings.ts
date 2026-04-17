@@ -26,13 +26,19 @@ export class ReadReceiptSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.userName)
           .onChange(async (value) => {
             this.plugin.settings.userName = value.trim();
+            this.plugin.settings.badgeColor = this.plugin.settings.userName
+              ? this.plugin.settings.userColors[this.plugin.settings.userName] ?? ""
+              : "";
             await this.plugin.saveSettings();
+            this.plugin.applyBadgeColorStyle();
+            this.plugin.refreshUI();
+            this.display();
           })
       );
 
     new Setting(containerEl)
       .setName("Badge color")
-      .setDesc("Din personliga färg på ditt namnchip i panelen. Sparas lokalt per enhet (inte synkad).")
+      .setDesc("Din personliga färg per användare. Uppdateras direkt och delas i team-vault via kvittot.")
       .addColorPicker((cp) =>
         cp
           .setValue(this.plugin.settings.badgeColor || "#7c3aed")

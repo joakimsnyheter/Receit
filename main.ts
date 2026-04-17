@@ -139,6 +139,7 @@ export default class ReadReceiptPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings.userColors = this.settings.userColors ?? {};
 
     const localUserName = this.loadLocalUserName();
     if (localUserName !== null) {
@@ -148,6 +149,8 @@ export default class ReadReceiptPlugin extends Plugin {
     const localBadgeColor = this.loadLocalBadgeColor();
     if (localBadgeColor !== null) {
       this.settings.badgeColor = localBadgeColor;
+    } else if (this.settings.userName) {
+      this.settings.badgeColor = this.settings.userColors[this.settings.userName] ?? "";
     }
 
     let migrated = false;
@@ -178,8 +181,37 @@ export default class ReadReceiptPlugin extends Plugin {
   }
 
   async saveSettings() {
+    this.upsertCurrentUserColor();
     this.saveLocalUserName(this.settings.userName.trim());
     this.saveLocalBadgeColor(this.settings.badgeColor.trim());
+    await this.saveData({ ...this.settings, userName: "", badgeColor: "" });
+  }
+
+  private upsertCurrentUserColor(): boolean {
+    const user = this.settings.userName.trim();
+    if (!user) return false;
+
+    const color = this.settings.badgeColor.trim();
+    const previous = this.settings.userColors[user];
+
+    if (!color) {
+      if (previous !== undefined) {
+        delete this.settings.userColors[user];
+        return true;
+      }
+      return false;
+    }
+
+    if (previous !== color) {
+      this.settings.userColors[user] = color;
+      return true;
+    }
+
+    return false;
+  }
+
+  private async persistCurrentUserColor(): Promise<void> {
+    if (!this.upsertCurrentUserColor()) return;
     await this.saveData({ ...this.settings, userName: "", badgeColor: "" });
   }
 
@@ -277,6 +309,8 @@ export default class ReadReceiptPlugin extends Plugin {
       new Notice("Read Receipt: No active markdown file.");
       return;
     }
+
+    await this.persistCurrentUserColor();
 
     const result = await addReceipt(
       this.app,
@@ -404,7 +438,6 @@ export default class ReadReceiptPlugin extends Plugin {
 
   applyBadgeColorStyle(): void {
     document.getElementById("receit-dynamic-style")?.remove();
-    const color = this.settings.badgeColor;
     const field = this.settings.fieldName;
 
     const css: string[] = [
@@ -412,13 +445,6 @@ export default class ReadReceiptPlugin extends Plugin {
       `.metadata-property[data-property-key="${field}"] .multi-select-pill { font-weight: 700; }`,
       `.metadata-property[data-property-key="${field}"] .metadata-property-value { font-weight: 700; }`,
     ];
-
-    if (color) {
-      css.push(
-        `.rr-chip--you { border-color: ${color} !important; background: ${color}22 !important; }`,
-        `.rr-chip--you .rr-chip-name { color: ${color} !important; }`
-      );
-    }
 
     const style = document.createElement("style");
     style.id = "receit-dynamic-style";
